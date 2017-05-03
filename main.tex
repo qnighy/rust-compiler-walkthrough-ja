@@ -221,7 +221,7 @@ Unicodeスカラー値とは、 \verb|0| 以上 \verb|0xD800| 未満か \verb|0x
 Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り、字句エラーがなければトークン列を返すことです。
 
 \begin{lstlisting}[gobble=2]
-  File ::= (Shebang | not Shebang) NonToken (Token NonToken)* eof
+  File ::= MaybeShebang Skip (Token Skip)* eof
 
   Token ::=
       InnerDocComment
@@ -232,9 +232,6 @@ Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り
     | StrictKeyword
     | ReservedKeyword
     | Lifetime
-
-  NonToken ::=
-    (Whitespace | Comment)* (not (Whitespace | Comment))
 \end{lstlisting}
 
 \begin{itemize}
@@ -246,6 +243,8 @@ Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り
 Rustの字句解析器は空白とコメントを無視します。コンパイラにとっては、これらはトークンを明示的に分割する以上の役割はありません。ただし、doc-commentは特別な扱いを受けます。
 
 \begin{lstlisting}[gobble=2]
+  Skip ::= (Whitespace | Comment)* (not MaySkip)
+
   Whitespace ::= PatternWhitespace+ (not PatternWhitespace)
 
   PatternWhitespace ::=
@@ -259,6 +258,14 @@ Rustの字句解析器は空白とコメントを無視します。コンパイ�
   LineCommentChar ::= (not "\n") AnyChar
   BlockCommentBody ::= (not ("/*" | "*/")) AnyChar
                      | "/*" BlockCommentBody* "*/"
+
+  MaySkip ::= PatternWhitespace
+            | "//" (not ("/" | "!"))
+            | "////"
+            | "/*" (not ("*" | "!"))
+            | "/**/"
+
+  MaybeShebang ::= Shebang | not Shebang
 
   Shebang ::= "#!" (not "[") LineCommentChar* ("\n" | eof)
 \end{lstlisting}
