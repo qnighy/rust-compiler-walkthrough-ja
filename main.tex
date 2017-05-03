@@ -295,7 +295,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
   OuterDocComment ::=
       "///" (not "/") LineDocCommentChar* ("\r\n" | "\n" | eof)
-    | "/**" BlockDocCommentBody* "*/"
+    | "/**" (not "/") BlockDocCommentBody* "*/"
 
   LineDocCommentChar ::= (not ("\r" | "\n")) AnyChar
 
