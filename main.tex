@@ -134,6 +134,17 @@
 \crefname{exercise}{練習問題}{練習問題}
 \Crefname{exercise}{練習問題}{練習問題}
 
+% The color scheme is from "hybrid" vim color scheme.
+\lstset{%
+  numbers=left,
+  basicstyle=\small\ttfamily,
+  identifierstyle=\color[rgb]{0.372, 0.0, 0.372},
+  commentstyle=\color[rgb]{0.372, 0.372, 0.372},
+  stringstyle=\color[rgb]{0.0, 0.372, 0.0},
+  keywordstyle=\color[rgb]{0.0, 0.372, 0.372}\bfseries,
+  backgroundcolor=\color[rgb]{0.894, 0.894, 0.894},
+}
+
 \title{Rust コンパイラーウォークスルー}
 \author{原 将己}
 %\date{2017年01月13日}
@@ -146,21 +157,503 @@
 
 \chapter{はじめに}
 
+
+
 \chapter{Rustコンパイラーの開発フロー}
 
-\chapter{CrateとCargo}
+\section{RFC}
+
+\section{メインリポジトリ}
+
+\section{文書}
+
+\section{フォーラム}
+
+
+\chapter{RustcとCrateとCargo}
+
+\section{crateのソース}
+
+\section{crateのバイナリー}
+
+\section{Cargoの基本動作}
+
+\section{依存関係の解決}
+
+\section{cratesリポジトリ}
+
+
 
 \chapter{字句と構文}
 
+\section{字句解析}
+
+Rustのソースファイルはまず字句解析にかけられます。
+
+\subsection{凡例}
+
+この節ではBNF風の記法を用いて文法を記述しています。BNF風ですが実際にはPEG (解析表現文法) に近い意味論です。
+
+\begin{itemize}
+  \item \verb|A B| は連接です。 2つの構文要素をこの順に並べたものです。
+  \item \verb$A | B$ はPEGの順序つきOR (\verb|A / B|) です。 \verb|A| を試し、失敗したら \verb|B| を試します。ただし、この節で \verb$A | B$ と書いた場合は、順番による違いが生じないようになっているはずです。
+  \item \verb|A*|, \verb|A+|, \verb|A?| は、0回以上の繰り返し、1回以上の繰り返し、高々1回の出現です。いずれも貪欲に実行したものと解釈しますが、それを知らなくても読めるように配慮したつもりです。
+  \item \verb|lookahead A| と \verb|not A| は先読み肯定と先読み否定です。慣れていないと読み間違えやすいかもしれません。 \verb|A (not B)| は、 \verb|A| だが \verb|B| が後続しないものです。 \verb|(not B) A| は、 \verb|A| だが同じ場所で \verb|B| にはならないものです。
+  \item \verb|eof| は文字列の末尾です。
+  \item \verb|"+="| のようにダブルクオートで囲んだものは文字列で、1文字ずつ連接したものと同じです。C言語風のエスケープを使っています。
+\end{itemize}
+
+\subsection{Unicode}
+
+Rustの字句解析器はUTF-8でエンコードされたファイルを入力します。UTF-8をデコードしたものは、Unicodeスカラー値の列とみなすことができます。
+
+Unicodeスカラー値とは、 \verb|0| 以上 \verb|0xD800| 未満か \verb|0xE000| 以上 \verb|0x110000| 未満の整数のことです。ここでは、Unicode文字といったらUnicodeスカラー値のことを指すことにします。
+
+\begin{lstlisting}[gobble=2]
+  AnyChar ::= (Any Unicode scalar value)
+
+  AnyAsciiChar ::=
+    (Any Unicode scalar value < 128)
+\end{lstlisting}
+
+\subsection{トークン列}
+
+Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り、字句エラーがなければトークン列を返すことです。
+
+\begin{lstlisting}[gobble=2]
+  File ::= (Shebang | not Shebang) NonToken (Token NonToken)* eof
+
+  Token ::=
+      InnerDocComment
+    | OuterDocComment
+    | Symbol
+    | Literal
+    | Identifier
+    | StrictKeyword
+    | ReservedKeyword
+    | Lifetime
+
+  NonToken ::=
+    (Whitespace | Comment)* (not (Whitespace | Comment))
+\end{lstlisting}
+
+\begin{itemize}
+  \item 字句的な特徴からトークンを分類すると、doc-comment, 記号、数値リテラル、文字列系リテラル、識別子とキーワード、生存期間と分けられます。しかし、構文解析器やマクロ展開器にとっての分類は必ずしもこれに沿った形ではありません。
+\end{itemize}
+
+\subsection{空白とコメント}
+
+Rustの字句解析器は空白とコメントを無視します。コンパイラにとっては、これらはトークンを明示的に分割する以上の役割はありません。ただし、doc-commentは特別な扱いを受けます。
+
+\begin{lstlisting}[gobble=2]
+  Whitespace ::= PatternWhitespace+ (not PatternWhitespace)
+
+  PatternWhitespace ::=
+    (Any Unicode scalar value with PATTERN_WHITE_SPACE)
+
+  Comment ::= "//" (not ("/" | "!")) LineCommentChar* ("\n" | eof)
+            | "////" LineCommentChar* ("\n" | eof)
+            | "/*" (not ("*" | "!")) BlockCommentBody* "*/"
+            | "/**/"
+
+  LineCommentChar ::= (not "\n") AnyChar
+  BlockCommentBody ::= (not ("/*" | "*/")) AnyChar
+                     | "/*" BlockCommentBody* "*/"
+
+  Shebang ::= "#!" (not "[") LineCommentChar* ("\n" | eof)
+\end{lstlisting}
+
+\begin{itemize}
+  \item Unicode TR31に従い、 \verb|Pattern_White_Space| に分類される文字は全て空白文字とみなされます。 \verb|Pattern_White_Space| はUnicode TR44で規定されており、 \verb|PropList.txt| で取得できます。現時点では以下の文字が \verb|Pattern_White_Space| に分類されます。
+    \begin{itemize}
+      \item \verb|U+0009| Control: CHARACTER TABULATION
+      \item \verb|U+000A| Control: LINE FEED (LF)
+      \item \verb|U+000B| Control: LINE TABULATION
+      \item \verb|U+000C| Control: FORM FEED (FF)
+      \item \verb|U+000D| Control: CARRIAGE RETURN (CR)
+      \item \verb|U+0020| SPACE
+      \item \verb|U+0085| Control: NEXT LINE (NEL)
+      \item \verb|U+200E| LEFT-TO-RIGHT MARK
+      \item \verb|U+200F| RIGHT-TO-LEFT MARK
+      \item \verb|U+2028| LINE SEPARATOR
+      \item \verb|U+2029| PARAGRAPH SEPARATOR
+    \end{itemize}
+  \item Cと同様に \verb|//| と \verb|/*| がコメントとみなされますが、 doc-commentはトークンとみなされるため、この意味で通常のコメントとは異なります。
+  \item Cとは異なり、 \verb|/*| はネストさせることができます。
+  \item \verb|////| 型のコメントの中では、doc-commentと同様に、単独でのキャリッジリターンの出現が禁止されています。これはバグではないかと思います。
+  \item 1行目が \verb|#!| で始まる場合、その行はシバンとみなされ、コメントと同様に無視されます。ただし、 \verb|#![| で始まる場合は、内部属性と紛らわしいため、例外的にシバンとはみなされません。
+\end{itemize}
+
+\subsection{doc-comment}
+
+doc-commentはコメントとよく似た構文を持ちますが、Rustコンパイラはこれを一つのトークンとみなします。
+
+\begin{lstlisting}[gobble=2]
+  InnerDocComment ::=
+      "//!" LineDocCommentChar* ("\r\n" | "\n" | eof)
+    | "/*!" BlockDocCommentBody* "*/"
+
+  OuterDocComment ::=
+      "///" (not "/") LineDocCommentChar* ("\r\n" | "\n" | eof)
+    | "/**" BlockDocCommentBody* "*/"
+
+  LineDocCommentChar ::= (not ("\r" | "\n")) AnyChar
+
+
+  BlockDocCommentBody ::= (not ("\r" | "/*" | "*/")) AnyChar
+                        | "\r\n"
+                        | "/*" BlockDocCommentBody* "*/"
+\end{lstlisting}
+
+\begin{itemize}
+  \item \verb|///|, \verb|//!|, \verb|/**|, \verb|/*!| で始まるコメントは、doc-commentと解釈されます。
+  \item 例外として、 \verb|////| で始まるコメントと \verb|/**/| は、doc-commentではありません。
+  \item これらのdoc-commentは、外部ツールだけではなく、Rustコンパイラによって認識されます。字句的に正しいdoc-commentであっても、構文的に誤った位置にあれば、コンパイルエラーになる可能性があります。
+  \item 通常のコメントと異なり、doc-comment内ではキャリッジリターン (CR) が単独で出現してはいけません。必ずラインフィードと対で (CRLF) 出現する必要があります。
+  \item Cとは異なり、 \verb|/*| はネストさせることができます。
+\end{itemize}
+
+\subsection{記号}
+
+\begin{lstlisting}[gobble=2]
+  Symbol ::=
+      "=" (not ("=" | ">"))
+    | "<" (not ("=" | "<" | "-"))
+    | "<=" | "==" | "!=" | ">="
+    | ">" (not ("=" | ">"))
+    | "&&" | "||"
+    | "!" (not "=")
+    | "~"
+    | "+" (not "=")
+    | "-" (not ("=" | ">"))
+    | "*" (not "=")
+    | "/" (not "=")
+    | "^" (not "=")
+    | "&" (not ("=" | "&"))
+    | "|" (not ("=" | "|"))
+    | ">>" (not "=")
+    | "<<" (not "=")
+    | "+=" | "-=" | "*=" | "/=" | "^="
+    | "&=" | "|=" | ">>=" | "<<="
+    | "@"
+    | "." (not ".")
+    | ".." (not ".")
+    | "..." | "," | ";"
+    | ":" (not ":")
+    | "::" | "->" | "<-" | "=>" | "#"
+    | "$" | "?"
+    | "(" | ")" | "{" | "}" | "[" | "]"
+    | Underscore
+
+  Underscore = "_" (not IdentContinue)
+\end{lstlisting}
+
+\begin{itemize}
+  \item 記号のパース規則は単純です。記号の候補の中で、一番長いものを選択します。
+  \item アンダースコアだけ特殊です。アンダースコアは字句的には識別子に近いですが、パーサーに渡す段階では識別子よりも記号に近い扱いを受けます。
+\end{itemize}
+
+\subsection{リテラル}
+
+\begin{lstlisting}[gobble=2]
+  Literal ::= LiteralBody LiteralSuffix?
+
+  LiteralBody ::= NumberLiteralBody | StringLikeLiteralBody
+
+  LiteralSuffix ::= IdentifierOrKeyword | Underscore
+\end{lstlisting}
+
+\begin{itemize}
+  \item リテラルは、数値リテラルと、文字列系リテラルの2種類あります。
+  \item いずれのリテラルにも、識別子またはキーワードを後置することができます。これは型を表すのに使います。
+  \item 識別子またはキーワードのかわりにアンダースコアを後置することもできます。リテラルの構造上数値リテラルでは不可能です。後置しても、パーサーからはなかったものとして扱われます。もしかしたらバグかもしれません。
+  \item 後置された文字列は型として解釈されますが、これは構文解析器の仕事です。
+\end{itemize}
+
+\subsection{数値リテラル}
+
+\begin{lstlisting}[gobble=2]
+  NumberLiteralBody ::= IntegerLiteralBody | FloatLiteralBody
+
+  IntegerLiteralBody ::=
+      "0b" "_"* BinDigit BinDigitU* (not DecDigitU) EnsureNotFloat
+    | "0o" "_"* OctDigit OctDigitU* (not DecDigitU) EnsureNotFloat
+    | Decimal (not DecDigitU) EnsureNotFloat
+    | "0x" "_"* HexDigit HexDigitU* (not HexDigitU) EnsureNotFloat
+
+  EnsureNotFloat ::= not ("." | "e" | "E")
+                   | lookahead ".."
+                   | lookahead ("." IdentStart)
+
+  FloatLiteralBody ::=
+      Decimal "." (not ("." | IdentStart | DecDigit))
+    | Decimal "." Decimal (not ("e" | "E"))
+    | Decimal "." Decimal ExponentPart
+    | Decimal ExponentPart
+
+  ExponentPart ::=
+      ("e" | "E") ("-" | "+")?
+      "_"* DecDigit DecDigitU* (not DecDigitU)
+
+  Decimal ::= DecDigit DecDigitU*
+
+  BinDigit ::= "0" | "1"
+
+  OctDigit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+
+  DecDigit ::= OctDigit | "8" | "9"
+
+  HexDigit ::=
+      DecDigit | "A" | "B" | "C" | "D" | "E" | "F"
+    | "a" | "b" | "c" | "d" | "e" | "f"
+
+  BinDigitU ::= BinDigit | "_"
+
+  OctDigitU ::= OctDigit | "_"
+
+  DecDigitU ::= DecDigit | "_"
+
+  HexDigitU ::= HexDigit | "_"
+\end{lstlisting}
+
+\begin{itemize}
+  \item 数値リテラルは、整数リテラルと浮動小数点数リテラルからなります。
+  \item 負の符号は単なる単項演算子です。トークンとしては、非負の数のみ扱われます。
+  \item アンダースコアで数を区切ることができます。しかし、数字がないのにアンダースコアだけある、という状況は禁止されています。また、リテラルの先頭や、小数点の直後には、アンダースコアを置くことはできません。
+  \item 2進数、8進数、16進数では接頭辞を明示する必要があります。 \verb|0| で始まっていても10進数です。また、接頭辞は小文字でなければなりません。16進数の桁や、指数部をあらわす \verb|e| は大文字でも小文字でも構いません。
+  \item 小数点の手前を省略することはできません。また、小数点の直後を省略できるのは、直後が \verb|.| でも識別子でもない場合だけです。
+  \item 整数の直後に \verb|.| を置けるのは、その直後が \verb|.| または識別子の場合だけです。
+  \item 上記の規則について、現在は \verb|._| が特別扱いされています。おそらくバグではないかと思います。
+  \item また、現在は \verb|0e|, \verb|0E| から始まる浮動小数点数がパースエラーになるバグがあります。これは修正済みで、次の安定板には入ると思います。
+  \item \verb|a| から \verb|f| までの文字は、16進数以外では、トークン区切りとみなされます。しかし、たとえ8進数であっても、 \verb|9| はトークン区切りとはみなされません。この位置でパースエラーになります。
+  \item \verb|f| という文字は、微妙なバランスの上に成立しています。16進数は整数でしか使えないので、接尾辞には \verb|i| か \verb|u| が指定できれば十分です。いっぽう、 \verb|f| を含む接尾辞が指定される浮動小数点数では、 \verb|f| の部分でリテラル本体のパースが打ち切られるため、うまく \verb|f| を指定することができます。
+\end{itemize}
+
+\subsection{文字列系リテラル}
+
+\begin{lstlisting}[gobble=2]
+  StringLikeLiteralBody ::=
+      ByteLiteralBody | ByteStringLiteralBody
+    | CharLiteralBody | CharStringLiteralBody
+
+  ByteLiteralBody ::=
+      "b\'" (not ("\\" | "\t" | "\n" | "\r" | "\'")) AnyAsciiChar "\'"
+    | "b\'\\" ("n" | "r" | "t" | "\\" | "\'" | "\"" | "0") "\'"
+    | "b\'\\x" HexDigit HexDigit "\'"
+
+  ByteStringLiteralBody ::=
+      "b\"" SingleByte* "\""
+    | "br" ("#" repeated N) "\""
+        ((not ("\"" ("#" repeated N))) AnyAsciiChar)*
+        "\"" ("#" repeated N)
+          for N >= 0
+
+  SingleByte ::=
+      (not ("\\" | "\r" | "\"")) AnyAsciiChar
+    | "\r\n"
+    | "\\" ("n" | "r" | "t" | "\\" | "\'" | "\"" | "0")
+    | "\\" ("\r\n" | "\n") Whitespace
+    | "\\x" HexDigit HexDigit
+
+  CharLiteralBody ::=
+      "\'" (not ("\\" | "\t" | "\n" | "\r" | "\'")) AnyChar "\'"
+    | "\'\\" ("n" | "r" | "t" | "\\" | "\'" | "\"" | "0") "\'"
+    | "\'\\x" OctDigit HexDigit "\'"
+    | "\'\\u{" HexDigit{1, 6} "}\'"
+      (only when x < 0xD800 or 0xE000 < x < 0x110000)
+
+  CharStringLiteralBody ::=
+      "\"" SingleChar* "\""
+    | "r" ("#" repeated N) "\""
+        ((not ("\"" ("#" repeated N))) AnyChar)*
+        "\"" ("#" repeated N)
+          for N >= 0
+
+  SingleChar ::=
+      (not ("\\" | "\r" | "\"")) AnyChar
+    | "\r\n"
+    | "\\" ("n" | "r" | "t" | "\\" | "\'" | "\"" | "0")
+    | "\\" ("\r\n" | "\n") Whitespace
+    | "\\x" OctDigit HexDigit
+    | "\\u{" HexDigit{1, 6} "}"
+      (only when x < 0xD800 or 0xE000 < x < 0x110000)
+\end{lstlisting}
+
+\begin{itemize}
+  \item バイト、バイト列、文字、文字列のいずれかを表します。
+  \item バイトまたは文字は \verb|'| で囲み、バイト列または文字列は \verb|"| で囲みます。
+  \item バイトまたはバイト列をあらわすときは \verb|b| を前置します。
+  \item バイト列または文字列の場合は生リテラルを使うこともできます。生リテラルは \verb|"| のかわりに \verb|r###"| のような形で開始します。この場合最初に \verb|"###| が出現した位置で終了になります。 \verb|#| の個数は0個以上で、左右で揃える必要があります。
+  \item バックスラッシュ、水平タブ、ラインフィード、キャリッジリターン、デリミタ(\verb|"| または \verb|'| のうちリテラルを囲うのに使われているほう) 以外のASCII文字は、そのまま書くことができます。
+  \item ASCII以外のUnicode文字(Unicodeスカラー値)は、文字または文字列リテラルにそのまま書くことができます。
+  \item タブ、ラインフィード、CRLF (キャリッジリターン+ラインフィード) は、生リテラルでないバイト列または文字列に直接書くことができます。CRLFはLFとみなされます。
+  \item 生リテラル以外のリテラルでは、 \verb|\n|, \verb|\r|, \verb|\t|, \verb|\\|, \verb|\'|, \verb|\"|, \verb|\0| がエスケープとして利用できます。
+  \item 生リテラル以外のリテラルでは、 \verb|\x| に続けて16進法で2桁(アンダースコア不可)の整数を指定することで、1バイトエスケープになります。ただし、 128より大きいバイトは、文字または文字列リテラルでは指定できません。
+  \item 生リテラル以外の文字または文字列リテラルでは、 \verb|\u{}| の中に16進法で1桁から6桁まで(アンダースコア不可)の整数を指定することで、Unicodeエスケープになります。ただし指定できるのはUnicodeスカラー値、つまり \verb|0| 以上 \verb|0xD800| 未満か、 \verb|0xE000| 以上 \verb|0x110000| 未満の整数のみです。
+  \item 生リテラル以外のバイト列または文字列リテラルでは、バックスラッシュの直後に改行(LFまたはCRLF)を続けると、該当バックスラッシュから、連続する空白文字が全てスキップされます。
+  \item 生リテラルではエスケープは使用できず、全ての文字がそのまま解釈されます。生バイト列リテラルでは、ASCII文字以外(128以上のスカラー値)は使用できません。
+\end{itemize}
+
+\subsection{識別子またはキーワード}
+
+\begin{lstlisting}[gobble=2]
+  Identifier ::=
+    (not (StrictKeyword | ReservedKeyword)) IdentifierOrKeyword
+
+  IdentifierOrKeyword ::=
+    (not (Underscore | MaybeString))
+    IdentStart IdentContinue* (not IdentContinue)
+
+  IdentStart ::=
+    (Any Unicode scalar value with XID_Start) | "_"
+
+  IdentContinue ::=
+    (Any Unicode scalar value with XID_Continue) | "_"
+
+  Underscore ::= "_" (not IdentContinue)
+
+  MaybeString ::= "r\"" | "r#" | "b\"" | "b\'" | "br\"" | "br#"
+
+  StrictKeyword ::= StrictKeywordString (not IdentContinue)
+
+  StrictKeywordString ::=
+      "as" | "box" | "break" | "const" | "continue" | "crate"
+    | "else" | "enum" | "extern" | "false" | "fn" | "for"
+    | "if" | "impl" | "in" | "let" | "loop" | "match" | "mod"
+    | "move" | "mut" | "pub" | "ref" | "return" | "self" | "Self"
+    | "static" | "struct" | "super" | "trait" | "true" | "type"
+    | "unsafe" | "use" | "where" | "while"
+
+  ReservedKeyword ::= ReservedKeywordString (not IdentContinue)
+
+  ReservedKeywordString ::=
+      "abstract" | "alignof" | "become" | "do" | "final"
+    | "macro" | "offsetof" | "override" | "priv" | "proc"
+    | "pure" | "sizeof" | "typeof" | "unsized" | "virtual"
+    | "yield"
+
+  WeakKeyword ::= WeakKeywordString (not IdentContinue)
+
+  WeakKeywordString ::= "default" | "union"
+\end{lstlisting}
+
+\begin{itemize}
+  \item 識別子またはキーワードは、 ASCIIの数字、大文字、小文字、アンダースコアからなります。また最初の文字はASCIIの大文字、小文字、アンダースコアのいずれかでなければなりません。
+  \item この規則は \verb|feature(non_ascii_idents)| によりUnicodeに拡張されます。この場合、識別子は \verb|XID_Continue| な文字またはアンダースコアからなります。また、最初の文字は \verb|XID_Start| な文字またはアンダースコアでなければなりません。これはUnicode TR31を考慮していますが、現在の実装は完全とはいえません。TR31ではNKFC等の正規化が言及されていますが、現在のコンパイラは正規化を全くしません。どの正規化をするかなどを含めて、議論の途中の状態です。
+  \item アンダースコア1文字からなる場合は、識別子ではなく記号として解釈されます。
+  \item \verb|r"|, \verb|r#|, \verb|b"|, \verb|b'|, \verb|br"|, \verb|br#| のいずれかで始まる場合は、これらの \verb|r|, \verb|b|, \verb|br| は識別子ではなく文字列系リテラルの開始として解釈されます。
+  \item 「識別子またはキーワード」のうち、いくつかは「強キーワード (strict keyword)」「予約キーワード (reserved keyword)」「弱キーワード (weak keyword)」のいずれかに分類されています。強キーワードは特別な意味をもつもので、予約キーワードは将来強キーワードとして使われる可能性を考慮して予約されているものです。
+  \item 強キーワードでも予約キーワードでもないものを識別子といいます。弱キーワードは、原則として識別子として扱われますが、文脈によっては特別な意味を持ちます。
+  \item 識別子またはキーワードは、マクロの観点からはキーワードか否かに関係なく同等に扱われます。識別子またはキーワードと、生存期間には、構文文脈が付与されます。アンダースコアは識別子またはキーワードではないため、構文文脈は付与されません。
+  \item 字句解析器は、空の構文文脈を付与します。
+\end{itemize}
+
+\subsection{生存期間}
+
+\begin{lstlisting}[gobble=2]
+  Lifetime ::=
+      (not "\'" IdentStart "\'")
+      "\'" IdentifierOrKeyword
+
+  WeakLifetimeKeyword ::= "\'static" (not IdentContinue)
+\end{lstlisting}
+
+\begin{itemize}
+  \item \verb|'| に識別子またはキーワードを後続させたものは、生存期間です。
+  \item ただし、文字リテラルとしても解釈できる場合は、文字リテラルが優先されます。
+  \item \verb|'_| は生存期間ではありません。
+  \item \verb|'static| は生存期間ですが、文脈によっては特別な意味を持ちます。
+  \item 識別子またはキーワードと、生存期間には、構文文脈が付与されます。
+  \item 字句解析器は、空の構文文脈を付与します。
+\end{itemize}
+
+\subsection{特殊なトークン}
+
+字句解析器以外によってのみ生成される特殊なトークンがいくつかあります。
+
+\begin{itemize}
+  \item 空文字列、 \verb|{{root}}|, \verb|$crate| はいずれも、上で説明した「識別子またはキーワード」の条件を満たしていませんが、内部的に識別子として生成される場合があります。
+  \item 同じく、空文字列が内部的に生存期間として生成される場合があります。なお、通常の生存期間の名前は、内部的には \verb|'| を含んだ形で保存されています。
+  \item 補間トークンは、ASTを1つのトークンとしてみなしたものです。
+    \begin{itemize}
+      \item アイテム、ブロック、文、パターン、式、型、識別子を含む補間トークンは、マクロの展開のために使われます。
+      \item メタアイテム、パス、トークンツリーを含む補間トークンは、属性構文拡張の展開のために使われます。
+      \item パターンマッチの腕、実装内アイテム、トレイト内アイテム、ジェネリックス、 \verb|where| 節、関数の仮引数部分は、準クオートの実現のために内部的に使用されます。
+    \end{itemize}
+  \item マクロの変数置換 \verb|$x| を表すためのトークン。内部的には \verb|$| を含まない形で保存されます。構文文脈も保存されます。
+\end{itemize}
+
+\section{構文解析のための字句}
+
+\section{構文解析}
+
+
+
 \chapter{構文拡張}
+
+\section{構文拡張のデータベース}
+
+\section{マクロ}
+
+\section{組み込みマクロ}
+
+\section{macro\_rules}
+
+\section{属性構文拡張}
+
+\section{手続きマクロ}
+
+
 
 \chapter{名前解決}
 
+\section{モジュール}
+
+\section{インポート解決}
+
+\section{レキシカルスコープの解決}
+
+\section{型依存の名前解決}
+
+\section{生存期間の解決}
+
+
+
 \chapter{型検査}
+
+\section{型}
+
+\section{トレイト}
+
+\section{Hindley-Milner型推論}
+
+\section{トレイト選択}
+
+\section{リージョン推論}
+
+\section{ドロップ検査}
+
+\section{借用検査}
+
+\section{可変性検査}
+
+
 
 \chapter{コード生成}
 
-\section{引用}
+\section{MIR}
+
+\section{LLVM IR}
+
+
+
+\chapter{ドキュメンテーション}
+
+\section{doc-commentの構文}
+
+
+
+\chapter{引用}
 
 \bibliographystyle{plain}
 \bibliography{refs}
