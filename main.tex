@@ -1,0 +1,169 @@
+% Use a package to avoid old (La)TeX habits.
+\RequirePackage[l2tabu, orthodox]{nag}
+
+% jsarticle: improved version of Japanese article style
+% [dvipdfmx]: we use dvipdfmx.
+% [uplatex]: we use uplatex.
+% [papersize]: tell page size to pdf generator.
+% [a4paper]: paper size is A4.
+% [10pt]: point size is 10pt.
+\documentclass[dvipdfmx,uplatex,papersize,a4paper,10pt]{jsbook}
+
+% This file is UTF-8 encoded.
+\usepackage[utf8]{inputenc}
+% Use T1 instead of OT1 for European texts.
+\usepackage[T1]{fontenc}
+% Fix Computer Modern rounding. Use this if you don't want to use Latin Modern.
+% \usepackage{fix-cm}
+% Use Latin Modern instead of Computer Modern font.
+\usepackage{lmodern}
+
+% AMS-related packages
+\usepackage{amstext,amsmath,amsthm,amssymb,amsfonts}
+
+% Avoid non-AMS mathematical usage.
+\usepackage[all, warning]{onlyamsmath}
+
+% Use otf fonts.
+\usepackage{otf}
+% Avoid "Font Shape undefined" error for italic Japanese texts.
+\DeclareFontShape{JY2}{hmc}{m}{it}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JY2}{hmc}{m}{sl}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JY2}{hmc}{m}{sc}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JY2}{hgt}{m}{it}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JY2}{hgt}{m}{sl}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JY2}{hmc}{bx}{it}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JY2}{hmc}{bx}{sl}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JT2}{hmc}{m}{it}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JT2}{hmc}{m}{sl}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JT2}{hmc}{m}{sc}{<->ssub*hmc/m/n}{}
+\DeclareFontShape{JT2}{hgt}{m}{it}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JT2}{hgt}{m}{sl}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JT2}{hmc}{bx}{it}{<->ssub*hgt/m/n}{}
+\DeclareFontShape{JT2}{hmc}{bx}{sl}{<->ssub*hgt/m/n}{}
+
+% Use newtx fonts; maybe should be avoided in paper submissions.
+\usepackage{newtxtext,newtxmath}
+
+% Scale bigops in math. Not needed if we use newtxmath.
+% \usepackage{exscale}
+
+% \braket{}, \set{}
+\usepackage{braket}
+
+% Japanese Ruby generation.
+\usepackage{pxrubrica}
+
+% Syntax-highlighted program listings.
+% jlisting: allow Japanese text in listings.
+% \usepackage{listings,jlisting}
+\usepackage{listings}
+
+% Pass pagesize to DVI and configure page layout.
+% [pass] is used to disable page layout overriding. Remove it if you want to configure page layout through this package.
+% [dvipdfm] is for dvipdfmx.
+% \usepackage[dvipdfm,pass]{geometry}
+
+% Extended graphics package; provides \includegraphics.
+\usepackage{graphicx}
+
+% Extended color package; provides \color.
+\usepackage{xcolor}
+
+% Provides \url.
+\usepackage{url}
+
+% \mleft/\mright, a little clever replacements for \left/\right.
+\usepackage{mleftright}
+
+% \mathscr
+\usepackage{mathrsfs}
+% Override ursfs.fd to suppress "Font shape `U/rsfs/m/n' in size <5.5>/<10.5> not available" warning.
+\DeclareFontFamily{U}{rsfs}{\skewchar\font127}
+\DeclareFontShape{U}{rsfs}{m}{n}{%
+  % <5> <6> rsfs5
+  <5> <5.5> <6> rsfs5
+  <7> rsfs7
+  % <8> <9> <10> <10.95> <12> <14.4> <17.28> <20.74> <24.88> rsfs10
+  <8> <9> <10> <10.5> <10.95> <12> <14.4> <17.28> <20.74> <24.88> rsfs10
+}{}
+
+% Part of hyperref.
+\usepackage{nameref}
+
+% Turns almost everything into hyper-reference.
+\usepackage{hyperref}
+% Improves non-ASCII characters in bookmarks.
+\usepackage{pxjahyper}
+
+% Float wrapper for algorithms.
+\usepackage{algorithm}
+% One of algorithm typesetting environments.
+\usepackage{algpseudocode}
+
+% Provides \cref, which automatically emits Lemma, Definition, etc.
+\usepackage{cleveref}
+
+\theoremstyle{definition}
+\newtheorem{definition}{定義}[section]
+\newtheorem{example}[definition]{例}
+\newtheorem{theorem}[definition]{定理}
+\newtheorem{lemma}[definition]{補題}
+\newtheorem{corollary}[definition]{系}
+\newtheorem{proposition}[definition]{命題}
+\newtheorem{axiom}[definition]{公理}
+\newtheorem{remark}[definition]{注意}
+\newtheorem{exercise}{練習問題}[section]
+
+\crefname{definition}{定義}{定義}
+\Crefname{definition}{定義}{定義}
+\crefname{example}{例}{例}
+\Crefname{example}{例}{例}
+\crefname{theorem}{定理}{定理}
+\Crefname{theorem}{定理}{定理}
+\crefname{lemma}{補題}{補題}
+\Crefname{lemma}{補題}{補題}
+\crefname{corollary}{系}{系}
+\Crefname{corollary}{系}{系}
+\crefname{proposition}{命題}{命題}
+\Crefname{proposition}{命題}{命題}
+\crefname{axiom}{公理}{公理}
+\Crefname{axiom}{公理}{公理}
+\crefname{remark}{注意}{注意}
+\Crefname{remark}{注意}{注意}
+\crefname{exercise}{練習問題}{練習問題}
+\Crefname{exercise}{練習問題}{練習問題}
+
+\title{Rust コンパイラーウォークスルー}
+\author{原 将己}
+%\date{2017年01月13日}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\chapter{はじめに}
+
+\chapter{Rustコンパイラーの開発フロー}
+
+\chapter{CrateとCargo}
+
+\chapter{字句と構文}
+
+\chapter{構文拡張}
+
+\chapter{名前解決}
+
+\chapter{型検査}
+
+\chapter{コード生成}
+
+\section{引用}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
+
