@@ -624,7 +624,8 @@ Rustのトークン列は、構文解析器から見ると大雑把に以下の�
     | "::" | "->" | "<-" | "=>" | "#" | "$" | "?"
     | "_"
     | IntegerLiteral | FloatLiteral
-    | StringLikeLiteral
+    | ByteLiteral | ByteStringLiteral
+    | CharLiteral | CharStringLiteral
     | Identifier
     | Lifetime
     | "as" | "box" | "break" | "const" | "continue" | "crate"
@@ -644,7 +645,7 @@ Rustのトークン列は、構文解析器から見ると大雑把に以下の�
 \begin{itemize}
   \item 記号や強キーワードはそれぞれ別種のトークンとして扱われます。
   \item 弱キーワード \verb|default|, \verb|union|, \verb|'static| は原則として識別子や生存期間の一種として扱われますが、特定の文脈では特別扱いされます。
-  \item リテラルの種類は構文解析にとってはそれほど重要ではありませんが、整数リテラルは特別な扱いを受けることがあります。
+  \item リテラルの種類は構文解析にとってはそれほど重要ではありませんが、整数リテラルと文字列リテラルは特別な扱いを受けることがあります。
 \end{itemize}
 
 \subsection{列の文法}
@@ -726,23 +727,43 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   \item パスが通常の識別子から始まる場合は、強制的に絶対パスとして解釈されます。
 \end{itemize}
 
-\subsection{静的アイテム}
+\subsection{静的アイテムと定数アイテム}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemStatic ::= ...
+  ItemStatic ::= "static" "mut"? Identifier ":" Type "=" Expression ";"
+
+  ItemConst ::= "const" Identifier ":" Type "=" Expression ";"
 \end{lstlisting}
 
-\subsection{定数アイテム}
+\begin{itemize}
+  \item 定数または静的記憶期間を持つ領域を定義します。定数に \verb|mut| はつけられません。
+  \item \verb|let| とは異なり、型は必須です。また、 \verb|let| のように左辺にパターンは使えません。
+\end{itemize}
+
+\subsection{関数定義}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemConst ::= ...
+  ItemFn ::=
+    ItemFnPrefix "fn" Identifier Generics?
+    "(" sequence(Pattern ":" Type, ",") ")" ("->" Type)?
+    WhereClauses?
+    Block
+
+  ItemFnPrefix ::=
+      "unsafe"? ("extern" CharStringLiteral?)?
+    | "const" "unsafe"?
 \end{lstlisting}
 
-\subsection{関数宣言・関数定義}
-
-\begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemFn ::= ...
-\end{lstlisting}
+\begin{itemize}
+  \item 関数を定義します。
+  \item \verb|feature(const_fn)| により \verb|const| が指定できます。指定すると、定数文脈でその関数を利用できるようになります。
+  \item \verb|unsafe| を指定すると、この関数の利用はunsafeだとマークされます。同時に、関数内部ではunsafe機能の利用が可能になります。
+  \item \verb|extern| によりABIを指定できます。 \verb|extern| を省略すると \verb|"rust"| ABIになります。 \verb|extern| とだけ指定すると \verb|"C"| ABIになります。
+  \item \verb|const| と \verb|extern| は同時指定できません。
+  \item ジェネリックスおよび \verb|where| が指定できます。ジェネリックスの位置は関数名の直後で、 \verb|where| の位置は戻り値型の直後です。
+  \item 引数リストはパターンと型を並べたものです。他の \verb|fn| に比べて最も単純といえます。
+  \item ブロック内に内部属性があれば、それは関数の属性になります。
+\end{itemize}
 
 \subsection{モジュール}
 
@@ -790,6 +811,48 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemImpl ::= ...
+\end{lstlisting}
+
+\subsection{型}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Type ::= ...
+\end{lstlisting}
+
+\subsection{式}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Expression ::= ...
+\end{lstlisting}
+
+\subsection{パターン}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Pattern ::= ...
+\end{lstlisting}
+
+\subsection{ブロック}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Block ::= ...
+\end{lstlisting}
+
+\subsection{文}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Statement ::= ...
+\end{lstlisting}
+
+\subsection{ジェネリックス}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  Generics ::= ...
+\end{lstlisting}
+
+\subsection{where節}
+
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  WhereClauses ::= ...
 \end{lstlisting}
 
 \subsection{マクロ呼び出し}
