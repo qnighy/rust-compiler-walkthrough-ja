@@ -671,7 +671,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \subsection{アイテム}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  Item ::= OuterAttribute* (NtItem | Visibility ItemBody)
+  Item ::= OuterAttribute* (NtItem | Visibility? ItemBody)
 
   ItemBody ::=
       ItemExternCrate
@@ -794,11 +794,38 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
     \end{itemize}
 \end{itemize}
 
-\subsection{externブロック}
+\subsection{外部アイテムの参照}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemForeign ::= ...
+  ItemForeign ::=
+    "extern" CharStringLiteral?
+    "{" InnerAttribute* ForeignItem* "}"
+
+  ForeignItem ::=
+    OuterAttribute* Visibility?
+    (ForeignItemStatic | ForeignItemFn)
+
+  ForeignItemStatic ::=
+    "static" "mut"? Identifier ":" Type ";"
+
+  ForeignItemFn ::=
+    "fn" Identifier Generics?
+    ForeignItemFnArgs ("->" Type)?
+    WhereClauses? ";"
+
+  ForeignItemFnArgs ::=
+      "(" sequence(Pattern ":" Type, ",") ")"
+    | "(" (Pattern ":" Type ",")+ "..." ")"
 \end{lstlisting}
+
+\begin{itemize}
+  \item 外部で定義されたシンボルをアイテムとして参照するには \verb|extern { }| で囲みます。ABI名を省略した場合は \verb|"C"| として扱われます。
+  \item 静的変数や関数の定義と似ていますが、定義部分がありません。
+  \item \verb|fn| に \verb|const|, \verb|unsafe|, \verb|extern| などを追加で指定することはできません。
+  \item 個別のアイテムに可視性をつけることができます。なお、 \verb|extern| 自身に可視性をつけても構文解析後にエラーになります。
+  \item 関数定義と同様、引数名は必要です。引数はパターンとしてパースされますが、識別子とワイルドカード以外のパターンを指定すると構文解析後にエラーになります。
+  \item 引数リストの末尾に \verb|...| を指定することで可変長引数を表現できます。可変長部分の前に1つ以上の引数が必要です。
+\end{itemize}
 
 \subsection{型別名}
 
