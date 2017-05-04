@@ -273,7 +273,7 @@ Rustの字句解析器は空白とコメントを無視します。コンパイ�
 \end{lstlisting}
 
 \begin{itemize}
-  \item Unicode TR31に従い、 \verb|Pattern_White_Space| に分類される文字は全て空白文字とみなされます。 \verb|Pattern_White_Space| はUnicode TR44で規定されており、 \verb|PropList.txt| で取得できます。現時点では以下の文字が \verb|Pattern_White_Space| に分類されます。
+  \item UAX~\#31~\cite{UAX31-25} に従い、 \verb|Pattern_White_Space| に分類される文字は全て空白文字とみなされます。 \verb|Pattern_White_Space| はUAX~\#44~\cite{UAX44-18}で規定されており、 \verb|PropList.txt| で取得できます。現時点では以下の文字が \verb|Pattern_White_Space| に分類されます。
     \begin{itemize}
       \item \verb|U+0009| Control: CHARACTER TABULATION
       \item \verb|U+000A| Control: LINE FEED (LF)
@@ -548,7 +548,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \begin{itemize}
   \item 識別子またはキーワードは、 ASCIIの数字、大文字、小文字、アンダースコアからなります。また最初の文字はASCIIの大文字、小文字、アンダースコアのいずれかでなければなりません。
-  \item この規則は \verb|feature(non_ascii_idents)| によりUnicodeに拡張されます。この場合、識別子は \verb|XID_Continue| な文字またはアンダースコアからなります。また、最初の文字は \verb|XID_Start| な文字またはアンダースコアでなければなりません。これはUnicode TR31を考慮していますが、現在の実装は完全とはいえません。TR31ではNKFC等の正規化が言及されていますが、現在のコンパイラは正規化を全くしません。どの正規化をするかなどを含めて、議論の途中の状態です。
+  \item この規則は \verb|feature(non_ascii_idents)| によりUnicodeに拡張されます。この場合、識別子は \verb|XID_Continue| な文字またはアンダースコアからなります。また、最初の文字は \verb|XID_Start| な文字またはアンダースコアでなければなりません。これはUAX~\#31~\cite{UAX31-25}を考慮していますが、現在の実装は完全とはいえません。UAX~\#31ではNKFC等の正規化が言及されていますが、現在のコンパイラは正規化を全くしません。どの正規化をするかなどを含めて、議論の途中の状態です。
   \item アンダースコア1文字からなる場合は、識別子ではなく記号として解釈されます。
   \item \verb|r"|, \verb|r#|, \verb|b"|, \verb|b'|, \verb|br"|, \verb|br#| のいずれかで始まる場合は、これらの \verb|r|, \verb|b|, \verb|br| は識別子ではなく文字列系リテラルの開始として解釈されます。
   \item 「識別子またはキーワード」のうち、いくつかは「強キーワード (strict keyword)」「予約キーワード (reserved keyword)」「弱キーワード (weak keyword)」のいずれかに分類されています。強キーワードは特別な意味をもつもので、予約キーワードは将来強キーワードとして使われる可能性を考慮して予約されているものです。
@@ -883,8 +883,6 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \section{doc-commentの構文}
 
 
-
-\chapter{引用}
 
 \bibliographystyle{plain}
 \bibliography{refs}
