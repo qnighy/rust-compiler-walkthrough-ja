@@ -695,6 +695,8 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   \item アイテムには属性と可視性を付与することができます。内部属性を書けるアイテムについては、内部属性と外部属性はマージされます。
   \item 構文解析済みのトークン (NtItem) が来た場合はそれをそのまま受理します。 NtItemには可視性を付与することはできません。 NtItem に由来する属性と、 NtItem に付与した外部属性は、マージされます。
   \item \verb|unsafe| や \verb|extern| などのキーワードを前置できるアイテムがあるため、アイテムの種類を決定するには数トークンほど先読みをする必要があります。
+  \item アイテム(トレイト内アイテム、実装内アイテム、外部アイテムを含む)の構文上の特徴として、波括弧もしくはセミコロンで終端されるというものがあります。なお、セミコロン単体はアイテムではありません。
+  \item アイテム(トレイト内アイテム、実装内アイテム、外部アイテムを含む)のもう一つの構文上の特徴として、マクロ以外はキーワード(弱キーワードを含む)から開始されるというものがあります。
 \end{itemize}
 
 \subsection{外部crate宣言}
@@ -823,33 +825,97 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   \item 静的変数や関数の定義と似ていますが、定義部分がありません。
   \item \verb|fn| に \verb|const|, \verb|unsafe|, \verb|extern| などを追加で指定することはできません。
   \item 個別のアイテムに可視性をつけることができます。なお、 \verb|extern| 自身に可視性をつけても構文解析後にエラーになります。
-  \item 関数定義と同様、引数名は必要です。引数はパターンとしてパースされますが、識別子とワイルドカード以外のパターンを指定すると構文解析後にエラーになります。
+  \item 関数定義と同様、引数名は必要です。引数はパターンとしてパースされますが、識別子 (\verb|mut| なし) とワイルドカード以外のパターンを指定すると構文解析後にエラーになります。
   \item 引数リストの末尾に \verb|...| を指定することで可変長引数を表現できます。可変長部分の前に1つ以上の引数が必要です。
 \end{itemize}
 
 \subsection{型別名}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemType ::= ...
+  ItemType ::=
+    "type" Identifier Generics? WhereClauses? "=" Type ";"
 \end{lstlisting}
+
+\begin{itemize}
+  \item 型別名を定義します。型別名は、型検査では元の型とほぼ同じものとして扱われます。
+\end{itemize}
 
 \subsection{列挙型}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemEnum ::= ...
+  ItemEnum ::=
+    "enum" Identifier Generics? WhereClauses?
+    "{" (EnumBody | EnumBodyWithDiscriminator) "}"
+
+  EnumBody ::=
+    sequence(
+      RecordEnumVariant | TupleEnumVariant | UnitEnumVariant,
+      ",")
+
+  EnumBodyWithDiscriminator ::=
+    sequence(
+      UnitEnumVariant | EnumBodyWithDiscriminator,
+      ",")
+
+  RecordEnumVariant ::=
+    OuterAttribute* Identifier "{" RecordStructBody "}"
+
+  TupleEnumVariant ::=
+    OuterAttribute* Identifier "(" TupleStructBody ")"
+
+  UnitEnumVariant ::=
+    OuterAttribute* Identifier
+
+  EnumVariantWithDiscriminator ::=
+    OuterAttribute* Identifier "=" Expression
 \end{lstlisting}
+
+\begin{itemize}
+  \item 代数的データ型を定義します。代数的データ型の各腕はバリアントと呼ばれます。
+  \item バリアントの定義は構造体とほぼ同様です。ユニット形式、タプル形式、レコード形式があります。
+  \item ユニット形式のバリアントのみからなる列挙型はC風列挙型 (C-like enum) と呼ばれます。C風列挙型はC言語の列挙型とほぼ同様です。
+  \item 特別なバリアントとして、判別子 (discriminator) を明示するバリアントがあります。判別子の明示はC風列挙体でのみ使えます。この判定は構文解析の途中に行われますが、これが仕様かどうかはよくわかりません。
+\end{itemize}
 
 \subsection{構造体}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemStruct ::= ...
+  ItemStruct ::=
+    "struct" Identifier Generics?
+    ( WhereClauses? ";"
+    | WhereClauses? "{" RecordStructBody "}"
+    | "(" TupleStructBody ")" WhereClauses? ";")
+
+  RecordStructBody ::= sequence(StructDeclField, ",")
+
+  StructDeclField ::=
+    OuterAttribute* Visibility? Identifier ":" Type
+
+  TupleStructBody ::=
+    sequence(OuterAttribute* Visibility? Type, ",")
 \end{lstlisting}
+
+\begin{itemize}
+  \item 構造体型を定義します。C言語と同様の、複数のフィールドを横に並べてできる型です。
+  \item 構造体はその形式により3種類に分けられます。ユニット構造体、タプル構造体、レコード構造体です。
+  \item ユニット構造体はフィールドリストを持ちません。したがってフィールドは必ず0個です。
+  \item タプル構造体は丸括弧で囲まれたフィールドリストを持ちます。各フィールドは名前を持たず、0,1,2,... という番号で識別されます。
+  \item レコード構造体は波括弧で囲まれたフィールドリストを持ちます。各フィールドは名前を持ちます。
+\end{itemize}
 
 \subsection{共用体}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemUnion ::= ...
+  ItemUnion ::=
+    "union" Identifier Generics? WhereClauses?
+    "{" RecordStructBody "}"
 \end{lstlisting}
+
+\begin{itemize}
+  \item 共用体型を定義します。C言語と同様の、複数のフィールドを同じ先頭アドレスに割り当ててできる型です。
+  \item 構文上は、共用体はレコード構造体とほぼ同じです。
+  \item \verb|union| は弱キーワードであるため、これ自身は識別子と紛らわしいです。しかし、Rustの構文ではキーワードでない識別子が2つ並ぶことはないため、曖昧性なく \verb|union| を発見することができます。
+\end{itemize}
 
 \subsection{トレイト}
 
