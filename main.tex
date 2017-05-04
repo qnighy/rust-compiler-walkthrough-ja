@@ -145,6 +145,8 @@
   backgroundcolor=\color[rgb]{0.894, 0.894, 0.894},
 }
 
+\input{common/bnflike-listing.tex}
+
 \title{Rust コンパイラーウォークスルー}
 \author{原 将己}
 %\date{2017年01月13日}
@@ -209,18 +211,18 @@ Rustの字句解析器はUTF-8でエンコードされたファイルを入力�
 
 Unicodeスカラー値とは、 \verb|0| 以上 \verb|0xD800| 未満か \verb|0xE000| 以上 \verb|0x110000| 未満の整数のことです。ここでは、Unicode文字といったらUnicodeスカラー値のことを指すことにします。
 
-\begin{lstlisting}[gobble=2]
-  AnyChar ::= (Any Unicode scalar value)
+\begin{lstlisting}[language=BNFLike, gobble=2]
+  AnyChar ::= /* Any Unicode scalar value */
 
   AnyAsciiChar ::=
-    (Any Unicode scalar value < 128)
+    /*Any Unicode scalar value < 128 */
 \end{lstlisting}
 
 \subsection{トークン列}
 
 Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り、字句エラーがなければトークン列を返すことです。
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   File ::= MaybeShebang Skip (Token Skip)* eof
 
   Token ::=
@@ -242,13 +244,13 @@ Rustの字句解析器の仕事は、Unicodeスカラー値の列を受け取り
 
 Rustの字句解析器は空白とコメントを無視します。コンパイラにとっては、これらはトークンを明示的に分割する以上の役割はありません。ただし、doc-commentは特別な扱いを受けます。
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Skip ::= (Whitespace | Comment)* (not MaySkip)
 
   Whitespace ::= PatternWhitespace+ (not PatternWhitespace)
 
   PatternWhitespace ::=
-    (Any Unicode scalar value with PATTERN_WHITE_SPACE)
+    /* Any Unicode scalar value with PATTERN_WHITE_SPACE */
 
   Comment ::= "//" (not ("/" | "!")) LineCommentChar* ("\n" | eof)
             | "////" LineCommentChar* ("\n" | eof)
@@ -295,7 +297,7 @@ Rustの字句解析器は空白とコメントを無視します。コンパイ�
 
 doc-commentはコメントとよく似た構文を持ちますが、Rustコンパイラはこれを一つのトークンとみなします。
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   InnerDocComment ::=
       "//!" LineDocCommentChar* ("\r\n" | "\n" | eof)
     | "/*!" BlockDocCommentBody* "*/"
@@ -322,7 +324,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{記号}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Symbol ::=
       "=" (not ("=" | ">"))
     | "<" (not ("=" | "<" | "-"))
@@ -351,8 +353,6 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
     | "$" | "?"
     | "(" | ")" | "{" | "}" | "[" | "]"
     | Underscore
-
-  Underscore = "_" (not IdentContinue)
 \end{lstlisting}
 
 \begin{itemize}
@@ -362,7 +362,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{リテラル}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Literal ::= LiteralBody LiteralSuffix?
 
   LiteralBody ::= NumberLiteralBody | StringLikeLiteralBody
@@ -379,7 +379,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{数値リテラル}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   NumberLiteralBody ::= IntegerLiteralBody | FloatLiteralBody
 
   IntegerLiteralBody ::=
@@ -438,7 +438,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{文字列系リテラル}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   StringLikeLiteralBody ::=
       ByteLiteralBody | ByteStringLiteralBody
     | CharLiteralBody | CharStringLiteralBody
@@ -450,10 +450,11 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
   ByteStringLiteralBody ::=
       "b\"" SingleByte* "\""
-    | "br" ("#" repeated N) "\""
-        ((not ("\"" ("#" repeated N))) AnyAsciiChar)*
-        "\"" ("#" repeated N)
-          for N >= 0
+    | "br" repeated("#", N) "\""
+        ((not ("\"" repeated("#", N))) AnyAsciiChar)*
+        "\"" repeated("#", N)
+        /* N >= 0 */
+        /* repeated("#", 3) means e.g. "###" */
 
   SingleByte ::=
       (not ("\\" | "\r" | "\"")) AnyAsciiChar
@@ -467,14 +468,15 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
     | "\'\\" ("n" | "r" | "t" | "\\" | "\'" | "\"" | "0") "\'"
     | "\'\\x" OctDigit HexDigit "\'"
     | "\'\\u{" HexDigit{1, 6} "}\'"
-      (only when x < 0xD800 or 0xE000 < x < 0x110000)
+      /* only when x < 0xD800 or 0xE000 < x < 0x110000 */
 
   CharStringLiteralBody ::=
       "\"" SingleChar* "\""
-    | "r" ("#" repeated N) "\""
-        ((not ("\"" ("#" repeated N))) AnyChar)*
-        "\"" ("#" repeated N)
-          for N >= 0
+    | "r" repeated("#", N) "\""
+        ((not ("\"" repeated("#", N))) AnyChar)*
+        "\"" repeated("#", N)
+        /* N >= 0 */
+        /* repeated("#", 3) means e.g. "###" */
 
   SingleChar ::=
       (not ("\\" | "\r" | "\"")) AnyChar
@@ -483,7 +485,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
     | "\\" ("\r\n" | "\n") Whitespace
     | "\\x" OctDigit HexDigit
     | "\\u{" HexDigit{1, 6} "}"
-      (only when x < 0xD800 or 0xE000 < x < 0x110000)
+      /* only when x < 0xD800 or 0xE000 < x < 0x110000 */
 \end{lstlisting}
 
 \begin{itemize}
@@ -503,7 +505,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{識別子またはキーワード}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Identifier ::=
     (not (StrictKeyword | ReservedKeyword)) IdentifierOrKeyword
 
@@ -512,10 +514,10 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
     IdentStart IdentContinue* (not IdentContinue)
 
   IdentStart ::=
-    (Any Unicode scalar value with XID_Start) | "_"
+    /* Any Unicode scalar value with XID_Start */ | "_"
 
   IdentContinue ::=
-    (Any Unicode scalar value with XID_Continue) | "_"
+    /* Any Unicode scalar value with XID_Continue */ | "_"
 
   Underscore ::= "_" (not IdentContinue)
 
@@ -557,7 +559,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \subsection{生存期間}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Lifetime ::=
       (not "\'" IdentStart "\'")
       "\'" IdentifierOrKeyword
@@ -607,7 +609,7 @@ Rustのトークン列は、構文解析器から見ると大雑把に以下の�
 
 ここでは簡単のために、記号やキーワードなどのトークンは単に \verb|"*="| や \verb|"fn"| といった文字列として表記します。実際には単一のトークンにマッチすると考えてください。
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Token ::= NonParen | "(" | ")" | "{" | "}" | "[" | "]"
 
   NonParen ::=
@@ -651,13 +653,13 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 この節では、このパターンを、以下のように定義される \verb|sequence(E, D)| を用いて略記します。
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   sequence(E, D) ::= (E (D E)* D?)?
 \end{lstlisting}
 
 \subsection{crate}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Crate ::= InnerAttribute* Item*
 \end{lstlisting}
 
@@ -667,7 +669,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \subsection{アイテム}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Item ::= OuterAttribute* (NtItem | Visibility ItemBody)
 
   ItemBody ::=
@@ -696,7 +698,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \subsection{外部crate宣言}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemExternCrate ::=
     "extern" "crate" Identifier ("as" Identifier)? ";"
 \end{lstlisting}
@@ -708,7 +710,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \subsection{インポート}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemUse ::=
       "use" ModPath ("as" Identifier)? ";"
     | "use" ModPath? "::" "*" ";"
@@ -726,91 +728,91 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \subsection{静的アイテム}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemStatic ::= ...
 \end{lstlisting}
 
 \subsection{定数アイテム}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemConst ::= ...
 \end{lstlisting}
 
 \subsection{関数宣言・関数定義}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemFn ::= ...
 \end{lstlisting}
 
 \subsection{モジュール}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemMod ::= ...
 \end{lstlisting}
 
 \subsection{externブロック}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemForeign ::= ...
 \end{lstlisting}
 
 \subsection{型別名}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemType ::= ...
 \end{lstlisting}
 
 \subsection{列挙型}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemEnum ::= ...
 \end{lstlisting}
 
 \subsection{構造体}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemStruct ::= ...
 \end{lstlisting}
 
 \subsection{共用体}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemUnion ::= ...
 \end{lstlisting}
 
 \subsection{トレイト}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemTrait ::= ...
 \end{lstlisting}
 
 \subsection{実装}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemImpl ::= ...
 \end{lstlisting}
 
 \subsection{マクロ呼び出し}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ItemMacro ::= ...
 \end{lstlisting}
 
 \subsection{パス}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   ModPath ::= ...
 \end{lstlisting}
 
 \subsection{可視性}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   Visibility ::= ...
 \end{lstlisting}
 
 \subsection{属性}
 
-\begin{lstlisting}[gobble=2]
+\begin{lstlisting}[language=BNFLike, gobble=2]
   OuterAttribute ::= ...
 
   InnerAttribute ::= ...
