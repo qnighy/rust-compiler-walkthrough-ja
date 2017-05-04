@@ -590,9 +590,231 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
   \item マクロの変数置換 \verb|$x| を表すためのトークン。内部的には \verb|$| を含まない形で保存されます。構文文脈も保存されます。
 \end{itemize}
 
-\section{構文解析のための字句}
-
 \section{構文解析}
+
+Rustの構文解析器は、大まかにいうと次の2つの仕事を行います。
+
+\begin{itemize}
+  \item トークン列を抽象構文木に変換する。
+  \item \verb|mod foo;| がある場合は、別のファイルを新規に読み出して再帰的に字句解析と構文解析を呼び出す。
+\end{itemize}
+
+後者は、C言語でいうところの \verb|#include| と似ていると考えてよいでしょう。ただし、Rustではプリプロセッサーではなく構文解析器がこれを行います。
+
+\subsection{構文解析のための字句}
+
+Rustのトークン列は、構文解析器から見ると大雑把に以下のように分類されます。
+
+ここでは簡単のために、記号やキーワードなどのトークンは単に \verb|"*="| や \verb|"fn"| といった文字列として表記します。実際には単一のトークンにマッチすると考えてください。
+
+\begin{lstlisting}[gobble=2]
+  Token ::= NonParen | "(" | ")" | "{" | "}" | "[" | "]"
+
+  NonParen ::=
+      InnerDocComment
+    | OuterDocComment
+    | "=" | "<" | "<=" | "==" | "!=" | ">=" | ">"
+    | "&&" | "||" | "!" | "~"
+    | "+" | "-" | "*" | "/" | "^" | "&" | "|" | ">>" | "<<"
+    | "+=" | "-=" | "*=" | "/=" | "^="
+    | "&=" | "|=" | ">>=" | "<<="
+    | "@" | "." | ".." | "..." | "," | ";" | ":"
+    | "::" | "->" | "<-" | "=>" | "#" | "$" | "?"
+    | "_"
+    | IntegerLiteral | FloatLiteral
+    | StringLikeLiteral
+    | Identifier
+    | Lifetime
+    | "as" | "box" | "break" | "const" | "continue" | "crate"
+    | "else" | "enum" | "extern" | "false" | "fn" | "for"
+    | "if" | "impl" | "in" | "let" | "loop" | "match" | "mod"
+    | "move" | "mut" | "pub" | "ref" | "return" | "self" | "Self"
+    | "static" | "struct" | "super" | "trait" | "true" | "type"
+    | "unsafe" | "use" | "where" | "while"
+    | "" | "{{root}}" | "$crate"
+    | NtItem | NtBlock | NtStmt | NtPat | NtExpr | NtTy | NtIdent
+    | NtMeta | NtPath | NtTT
+    | NtArm | NtImplItem | NtTraitItem | NtGenerics
+    | NtWhereClause | NtArg
+    | SubstNt
+\end{lstlisting}
+
+\begin{itemize}
+  \item 記号や強キーワードはそれぞれ別種のトークンとして扱われます。
+  \item 弱キーワード \verb|default|, \verb|union|, \verb|'static| は原則として識別子や生存期間の一種として扱われますが、特定の文脈では特別扱いされます。
+  \item リテラルの種類は構文解析にとってはそれほど重要ではありませんが、整数リテラルは特別な扱いを受けることがあります。
+\end{itemize}
+
+\subsection{列の文法}
+
+Rustの構文では、コンマ区切りの列が様々な場所で出てきます。これらの多くは、0個以上の要素が指定可能で、末尾に最大1個の余分なコンマをつけることが許されています。
+
+この節では、このパターンを、以下のように定義される \verb|sequence(E, D)| を用いて略記します。
+
+\begin{lstlisting}[gobble=2]
+  sequence(E, D) ::= (E (D E)* D?)?
+\end{lstlisting}
+
+\subsection{crate}
+
+\begin{lstlisting}[gobble=2]
+  Crate ::= InnerAttribute* Item*
+\end{lstlisting}
+
+\begin{itemize}
+  \item crate全体はmodとほぼ同じですが、構造上外部属性が指定できません。
+\end{itemize}
+
+\subsection{アイテム}
+
+\begin{lstlisting}[gobble=2]
+  Item ::= OuterAttribute* (NtItem | Visibility ItemBody)
+
+  ItemBody ::=
+      ItemExternCrate
+    | ItemUse
+    | ItemStatic
+    | ItemConst
+    | ItemFn
+    | ItemMod
+    | ItemForeign
+    | ItemType
+    | ItemEnum
+    | ItemStruct
+    | ItemUnion
+    | ItemTrait
+    | ItemImpl
+    | ItemMacro
+\end{lstlisting}
+
+\begin{itemize}
+  \item 関数や型など、Rustでグローバルな位置に置けるものはアイテムと呼ばれます。
+  \item アイテムには属性と可視性を付与することができます。内部属性を書けるアイテムについては、内部属性と外部属性はマージされます。
+  \item 構文解析済みのトークン (NtItem) が来た場合はそれをそのまま受理します。 NtItemには可視性を付与することはできません。
+  \item \verb|unsafe| や \verb|extern| などのキーワードを前置できるアイテムがあるため、アイテムの種類を決定するには数トークンほど先読みをする必要があります。
+\end{itemize}
+
+\subsection{外部crate宣言}
+
+\begin{lstlisting}[gobble=2]
+  ItemExternCrate ::=
+    "extern" "crate" Identifier ("as" Identifier)? ";"
+\end{lstlisting}
+
+\begin{itemize}
+  \item crateのルートモジュールを \verb|as| で指定した名前で参照します。
+  \item \verb|as| を省略した場合は、crate名が使われます。
+\end{itemize}
+
+\subsection{インポート}
+
+\begin{lstlisting}[gobble=2]
+  ItemUse ::=
+      "use" ModPath ("as" Identifier)? ";"
+    | "use" ModPath? "::" "*" ";"
+    | "use" (ModPath? "::")? "{" sequence(UseListElement, ",") "}" ";"
+
+  UseListElement ::= (Identifier | "self") ("as" Identifier)?
+\end{lstlisting}
+
+\begin{itemize}
+  \item 定義に対する別名づけを行います。単独インポートとグロブインポートの2種類があります。
+  \item \verb|{| \verb|}| で囲んだものはリストインポートといい、複数の単独インポートに展開されます。 \verb|self| を使うことで、モジュールそのものとモジュール内の定義を同時にインポートすることもできます。
+  \item 単独インポートで \verb|as| を省略した場合は、パスの最後の要素が採用されます。
+  \item パスが通常の識別子から始まる場合は、強制的に絶対パスとして解釈されます。
+\end{itemize}
+
+\subsection{静的アイテム}
+
+\begin{lstlisting}[gobble=2]
+  ItemStatic ::= ...
+\end{lstlisting}
+
+\subsection{定数アイテム}
+
+\begin{lstlisting}[gobble=2]
+  ItemConst ::= ...
+\end{lstlisting}
+
+\subsection{関数宣言・関数定義}
+
+\begin{lstlisting}[gobble=2]
+  ItemFn ::= ...
+\end{lstlisting}
+
+\subsection{モジュール}
+
+\begin{lstlisting}[gobble=2]
+  ItemMod ::= ...
+\end{lstlisting}
+
+\subsection{externブロック}
+
+\begin{lstlisting}[gobble=2]
+  ItemForeign ::= ...
+\end{lstlisting}
+
+\subsection{型別名}
+
+\begin{lstlisting}[gobble=2]
+  ItemType ::= ...
+\end{lstlisting}
+
+\subsection{列挙型}
+
+\begin{lstlisting}[gobble=2]
+  ItemEnum ::= ...
+\end{lstlisting}
+
+\subsection{構造体}
+
+\begin{lstlisting}[gobble=2]
+  ItemStruct ::= ...
+\end{lstlisting}
+
+\subsection{共用体}
+
+\begin{lstlisting}[gobble=2]
+  ItemUnion ::= ...
+\end{lstlisting}
+
+\subsection{トレイト}
+
+\begin{lstlisting}[gobble=2]
+  ItemTrait ::= ...
+\end{lstlisting}
+
+\subsection{実装}
+
+\begin{lstlisting}[gobble=2]
+  ItemImpl ::= ...
+\end{lstlisting}
+
+\subsection{マクロ呼び出し}
+
+\begin{lstlisting}[gobble=2]
+  ItemMacro ::= ...
+\end{lstlisting}
+
+\subsection{パス}
+
+\begin{lstlisting}[gobble=2]
+  ModPath ::= ...
+\end{lstlisting}
+
+\subsection{可視性}
+
+\begin{lstlisting}[gobble=2]
+  Visibility ::= ...
+\end{lstlisting}
+
+\subsection{属性}
+
+\begin{lstlisting}[gobble=2]
+  OuterAttribute ::= ...
+
+  InnerAttribute ::= ...
+\end{lstlisting}
 
 
 
