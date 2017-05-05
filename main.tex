@@ -671,7 +671,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \subsection{アイテム}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  Item ::= OuterAttribute* (NtItem | Visibility? ItemBody)
+  Item ::= OuterAttribute* (NtItem | Visibility ItemBody)
 
   ItemBody ::=
       ItemExternCrate
@@ -693,6 +693,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \begin{itemize}
   \item 関数や型など、Rustでグローバルな位置に置けるものはアイテムと呼ばれます。
   \item アイテムには属性と可視性を付与することができます。内部属性を書けるアイテムについては、内部属性と外部属性はマージされます。
+  \item \verb|Visibility| に \verb|?| がついていませんが、これは可視性を省略できないという意味ではありません。 \verb|Visibility| 自身の定義に、省略可能であることが含まれています。
   \item 構文解析済みのトークン (NtItem) が来た場合はそれをそのまま受理します。 NtItemには可視性を付与することはできません。 NtItem に由来する属性と、 NtItem に付与した外部属性は、マージされます。
   \item \verb|unsafe| や \verb|extern| などのキーワードを前置できるアイテムがあるため、アイテムの種類を決定するには数トークンほど先読みをする必要があります。
   \item アイテム(トレイト内アイテム、実装内アイテム、外部アイテムを含む)の構文上の特徴として、波括弧もしくはセミコロンで終端されるというものがあります。なお、セミコロン単体はアイテムではありません。
@@ -804,7 +805,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
     "{" InnerAttribute* ForeignItem* "}"
 
   ForeignItem ::=
-    OuterAttribute* Visibility?
+    OuterAttribute* Visibility
     (ForeignItemStatic | ForeignItemFn)
 
   ForeignItemStatic ::=
@@ -889,10 +890,10 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   RecordStructBody ::= sequence(StructDeclField, ",")
 
   StructDeclField ::=
-    OuterAttribute* Visibility? Identifier ":" Type
+    OuterAttribute* Visibility Identifier ":" Type
 
   TupleStructBody ::=
-    sequence(OuterAttribute* Visibility? Type, ",")
+    sequence(OuterAttribute* Visibility Type, ",")
 \end{lstlisting}
 
 \begin{itemize}
