@@ -548,7 +548,7 @@ doc-commentはコメントとよく似た構文を持ちますが、Rustコン�
 
 \begin{itemize}
   \item 識別子またはキーワードは、 ASCIIの数字、大文字、小文字、アンダースコアからなります。また最初の文字はASCIIの大文字、小文字、アンダースコアのいずれかでなければなりません。
-  \item この規則は \verb|feature(non_ascii_idents)| によりUnicodeに拡張されます。この場合、識別子は \verb|XID_Continue| な文字またはアンダースコアからなります。また、最初の文字は \verb|XID_Start| な文字またはアンダースコアでなければなりません。これはUAX~\#31~\cite{UAX31-25}を考慮していますが、現在の実装は完全とはいえません。UAX~\#31ではNKFC等の正規化が言及されていますが、現在のコンパイラは正規化を全くしません。どの正規化をするかなどを含めて、議論の途中の状態です。
+  \item この規則は \verb|feature(non_ascii_idents)|~\cite{RustIssue28979} によりUnicodeに拡張されます。この場合、識別子は \verb|XID_Continue| な文字またはアンダースコアからなります。また、最初の文字は \verb|XID_Start| な文字またはアンダースコアでなければなりません。これはUAX~\#31~\cite{UAX31-25}を考慮していますが、現在の実装は完全とはいえません。UAX~\#31ではNKFC等の正規化が言及されていますが、現在のコンパイラは正規化を全くしません。どの正規化をするかなどを含めて、議論の途中の状態です。
   \item アンダースコア1文字からなる場合は、識別子ではなく記号として解釈されます。
   \item \verb|r"|, \verb|r#|, \verb|b"|, \verb|b'|, \verb|br"|, \verb|br#| のいずれかで始まる場合は、これらの \verb|r|, \verb|b|, \verb|br| は識別子ではなく文字列系リテラルの開始として解釈されます。
   \item 「識別子またはキーワード」のうち、いくつかは「強キーワード (strict keyword)」「予約キーワード (reserved keyword)」「弱キーワード (weak keyword)」のいずれかに分類されています。強キーワードは特別な意味をもつもので、予約キーワードは将来強キーワードとして使われる可能性を考慮して予約されているものです。
@@ -761,7 +761,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{itemize}
   \item 関数を定義します。
-  \item \verb|feature(const_fn)| により \verb|const| が指定できます。指定すると、定数文脈でその関数を利用できるようになります。
+  \item \verb|feature(const_fn)|/RFC0911~\cite{RustRFC0911} により \verb|const| が指定できます。指定すると、定数文脈でその関数を利用できるようになります。
   \item \verb|unsafe| を指定すると、この関数の利用はunsafeだとマークされます。同時に、関数内部ではunsafe機能の利用が可能になります。
   \item \verb|extern| によりABIを指定できます。 \verb|extern| を省略すると \verb|"rust"| ABIになります。 \verb|extern| とだけ指定すると \verb|"C"| ABIになります。
   \item \verb|const| と \verb|extern| は同時指定できません。
@@ -915,6 +915,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \end{lstlisting}
 
 \begin{itemize}
+  \item \verb|feature(untagged_unions)|/RFC1444~\cite{RustRFC1444} が提供するunstable機能です。
   \item 共用体型を定義します。C言語と同様の、複数のフィールドを同じ先頭アドレスに割り当ててできる型です。
   \item 構文上は、共用体はレコード構造体とほぼ同じです。
   \item \verb|union| は弱キーワードであるため、これ自身は識別子と紛らわしいです。しかし、Rustの構文ではキーワードでない識別子が2つ並ぶことはないため、曖昧性なく \verb|union| を発見することができます。
@@ -962,11 +963,11 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   \item トレイトを定義します。 \verb|unsafe| を指定することができます。
   \item ジェネリックスと \verb|where| のほかに、スーパートレイト境界を指定できます。これは \verb|Self| に対する境界として解釈されます。
   \item トレイト内アイテムは、マクロの他には、関連定数、メソッド、関連型の3種類が指定できます。
-  \item 関連定数は \verb|feature(associated_consts)| が提供するunstable機能です。
+  \item 関連定数は \verb|feature(associated_consts)|/RFC0195~\cite{RustRFC0195} が提供するunstable機能です。
   \item 関連型は単相です。
   \item メソッドには実装を与えることもできます。実装のないメソッドを必須メソッド、実装のあるメソッドを提供メソッドといいます。
   \item メソッドは第一引数に \verb|self| という特殊な名前の引数をとることが可能です。型を省略するための短縮記法もあります。
-  \item 現在の実装では、(メソッドの実装が提供されているか否かによらず)メソッドの引数名は省略できます。その影響で、メソッドの引数部に書けるパターンに構文上の制約が存在します。この構文はRFC~1685で廃止が決定されました。
+  \item 現在の実装では、(メソッドの実装が提供されているか否かによらず)メソッドの引数名は省略できます。その影響で、メソッドの引数部に書けるパターンに構文上の制約が存在します。この構文はRFC1685~\cite{RustRFC1685}で廃止が決定されました。
 \end{itemize}
 
 \subsection{実装}
