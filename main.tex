@@ -688,6 +688,8 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
     | ItemTrait
     | ItemImpl
     | ItemMacro
+
+  ItemMacro ::= ItemLikeMacroInvoc
 \end{lstlisting}
 
 \begin{itemize}
@@ -747,12 +749,12 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemFn ::=
-    ItemFnPrefix "fn" Identifier Generics?
+    FnPrefix "fn" Identifier Generics?
     "(" sequence(Pattern ":" Type, ",") ")" ("->" Type)?
     WhereClauses?
     Block
 
-  ItemFnPrefix ::=
+  FnPrefix ::=
       "unsafe"? ("extern" CharStringLiteral?)?
     | "const" "unsafe"?
 \end{lstlisting}
@@ -921,8 +923,51 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \subsection{トレイト}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemTrait ::= ...
+  ItemTrait ::=
+    "unsafe"? "trait" Identifier Generics?
+    (":" TyParamBounds)? WhereClauses?
+    "{" TraitItem* "}"
+
+  TraitItem ::= OuterAttribute* TraitItemBody
+
+  TraitItemBody ::=
+      TraitItemConst
+    | TraitItemMethod
+    | TraitItemType
+    | TraitItemMacro
+
+  TraitItemConst ::=
+    "const" Identifier ":" Type ("=" Expression)? ";"
+
+  TraitItemMethod ::=
+    FnPrefix "fn" Identifier Generics? WhereClauses?
+    TraitMethodArgs ("->" Type)?
+    (";" | Block)
+
+  TraitMethodArgs ::=
+      "(" sequence(Pattern ":" Type, ",") ")"
+    | "(" SelfArgument ")"
+    | "(" SelfArgument "," sequence(Pattern ":" Type, ",") ")"
+
+  SelfArgument ::=
+      split_here("&") Lifetime? "mut"? "self"
+    | "mut"? "self" (":" Type)?
+
+  TraitItemType ::= "type" TyParam ";"
+
+  TraitItemMacro ::= ItemLikeMacroInvoc
 \end{lstlisting}
+
+\begin{itemize}
+  \item トレイトを定義します。 \verb|unsafe| を指定することができます。
+  \item ジェネリックスと \verb|where| のほかに、スーパートレイト境界を指定できます。これは \verb|Self| に対する境界として解釈されます。
+  \item トレイト内アイテムは、マクロの他には、関連定数、メソッド、関連型の3種類が指定できます。
+  \item 関連定数は \verb|feature(associated_consts)| が提供するunstable機能です。
+  \item 関連型は単相です。
+  \item メソッドには実装を与えることもできます。実装のないメソッドを必須メソッド、実装のあるメソッドを提供メソッドといいます。
+  \item メソッドは第一引数に \verb|self| という特殊な名前の引数をとることが可能です。型を省略するための短縮記法もあります。
+  \item 現在の実装では、(メソッドの実装が提供されているか否かによらず)メソッドの引数名は省略できます。その影響で、メソッドの引数部に書けるパターンに構文上の制約が存在します。この構文はRFC~1685で廃止が決定されました。
+\end{itemize}
 
 \subsection{実装}
 
@@ -964,18 +1009,22 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   Generics ::= ...
-\end{lstlisting}
 
-\subsection{where節}
+  TyParam ::= ...
 
-\begin{lstlisting}[language=BNFLike, gobble=2]
   WhereClauses ::= ...
+
+  TyParamBounds ::= ...
 \end{lstlisting}
 
 \subsection{マクロ呼び出し}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemMacro ::= ...
+  ItemLikeMacroInvoc ::= ...
+
+  StmtLikeMacroInvoc ::= ...
+
+  ExprLikeMacroInvoc ::= ...
 \end{lstlisting}
 
 \subsection{パス}
