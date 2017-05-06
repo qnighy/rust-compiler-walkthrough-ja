@@ -686,6 +686,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
     | ItemStruct
     | ItemUnion
     | ItemTrait
+    | ItemDefaultImpl
     | ItemImpl
     | ItemMacro
 
@@ -941,9 +942,9 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
     "const" Identifier ":" Type ("=" Expression)? ";"
 
   TraitItemMethod ::=
-    FnPrefix "fn" Identifier Generics? WhereClauses?
+    FnPrefix "fn" Identifier Generics?
     TraitMethodArgs ("->" Type)?
-    (";" | Block)
+    WhereClauses? (";" | Block)
 
   TraitMethodArgs ::=
       "(" sequence(Pattern ":" Type, ",") ")"
@@ -973,13 +974,66 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \subsection{実装}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
-  ItemImpl ::= ...
+  ItemDefaultImpl ::=
+    "unsafe"? "impl" ("<" ">")? TraitRef "for" ".." "{" "}"
+
+  ItemImpl ::= InherentImpl | TraitImpl
+
+  InherentImpl ::=
+    "default"? "unsafe"? "impl" Generics?
+    Type "{" InnerAttribute* ImplItem* "}"
+
+  TraitImpl ::=
+    "default"? "unsafe"? "impl" Generics?
+    "!"? TraitRef "for" Type "{" InnerAttribute* ImplItem* "}"
+
+  ImplItem ::=
+      NtImplItem
+    | OuterAttribute* Visibility "default"? ImplItemBody
+
+  ImplItemBody ::=
+      ImplItemConst
+    | ImplItemMethod
+    | ImplItemType
+    | ImplItemMacro
+
+  ImplItemConst ::=
+    "const" Identifier ":" Type "=" Expression ";"
+
+  ImplItemMethod ::=
+    FnPrefix "fn" Identifier Generics?
+    ImplMethodArgs ("->" Type)?
+    WhereClauses? Block
+
+  ImplMethodArgs ::=
+      "(" sequence(Pattern ":" Type, ",") ")"
+    | "(" SelfArgument ")"
+    | "(" SelfArgument "," sequence(Pattern ":" Type, ",") ")"
+
+  ImplItemType ::=
+    "type" Identifier "=" Type ";"
+
+  ImplItemMacro ::= ItemLikeMacroInvoc
 \end{lstlisting}
+
+\begin{itemize}
+  \item 固有実装とトレイト実装の2種類に分けられます。既定実装はトレイト実装の一種とみなされますが、抽象構文木の上では区別されています。
+  \item 実装は名前を持ちません。そのため名前解決で発見されることはなく、異なるメカニズムで発見されます。固有実装は型、トレイト実装はトレイトに紐付けられており、型検査のさいに型やトレイトをキーにして検索されます。
+  \item \verb|unsafe| なトレイトに実装を与えるときは、実装にも \verb|unsafe| をつけます。
+  \item \verb|unsafe| を固有実装につけた場合は、構文解析後にエラーとなります。
+  \item \verb|default| は \verb|feature(specialization)|/RFC1210~\cite{RustRFC1210} が提供するunstable機能です。 \verb|impl| 内のメソッドにつけることで効果を発揮します。 \verb|impl| 自身につけた場合は、 \verb|impl| 内の全てのアイテムにつけるのと同じ意味になります。
+  \item トレイト実装のトレイト部分には \verb|!| をつけることができます。これによりその実装は否定実装となります。
+  \item 既定実装と否定実装は、引数をとらないマーカートレイト(メソッドや関連定数、関連型をもたないトレイト)に対してのみ与えることができます。既定実装が中身をもたないことのみ構文的に強制されますが、残りは構文解析よりも後に検査されます。
+  \item 実装の本体には関連定数、メソッド、関連型、およびそれらを生成するマクロを書くことができます。関連定数と関連型の構文は定数や型別名とほぼ同じですが、関連型は単相です。
+  \item メソッドは関数とほぼ同じですが、 \verb|self| 引数をとることができます。
+\end{itemize}
 
 \subsection{型}
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   Type ::= ...
+
+  TraitRef ::= ...
 \end{lstlisting}
 
 \subsection{式}
