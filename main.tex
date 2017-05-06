@@ -752,7 +752,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   ItemFn ::=
     FnPrefix "fn" Identifier Generics?
     "(" sequence(Pattern ":" Type, ",") ")" ("->" Type)?
-    WhereClauses?
+    WhereClause?
     Block
 
   FnPrefix ::=
@@ -817,7 +817,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   ForeignItemFn ::=
     "fn" Identifier Generics?
     ForeignItemFnArgs ("->" Type)?
-    WhereClauses? ";"
+    WhereClause? ";"
 
   ForeignItemFnArgs ::=
       "(" sequence(Pattern ":" Type, ",") ")"
@@ -837,7 +837,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemType ::=
-    "type" Identifier Generics? WhereClauses? "=" Type ";"
+    "type" Identifier Generics? WhereClause? "=" Type ";"
 \end{lstlisting}
 
 \begin{itemize}
@@ -848,7 +848,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemEnum ::=
-    "enum" Identifier Generics? WhereClauses?
+    "enum" Identifier Generics? WhereClause?
     "{" (EnumBody | EnumBodyWithDiscriminator) "}"
 
   EnumBody ::=
@@ -886,9 +886,9 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemStruct ::=
     "struct" Identifier Generics?
-    ( WhereClauses? ";"
-    | WhereClauses? "{" RecordStructBody "}"
-    | "(" TupleStructBody ")" WhereClauses? ";")
+    ( WhereClause? ";"
+    | WhereClause? "{" RecordStructBody "}"
+    | "(" TupleStructBody ")" WhereClause? ";")
 
   RecordStructBody ::= sequence(StructDeclField, ",")
 
@@ -911,7 +911,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemUnion ::=
-    "union" Identifier Generics? WhereClauses?
+    "union" Identifier Generics? WhereClause?
     "{" RecordStructBody "}"
 \end{lstlisting}
 
@@ -927,7 +927,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 \begin{lstlisting}[language=BNFLike, gobble=2]
   ItemTrait ::=
     "unsafe"? "trait" Identifier Generics?
-    (":" TyParamBounds)? WhereClauses?
+    (":" TyParamBounds)? WhereClause?
     "{" TraitItem* "}"
 
   TraitItem ::= OuterAttribute* TraitItemBody
@@ -944,7 +944,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   TraitItemMethod ::=
     FnPrefix "fn" Identifier Generics?
     TraitMethodArgs ("->" Type)?
-    WhereClauses? (";" | Block)
+    WhereClause? (";" | Block)
 
   TraitMethodArgs ::=
       "(" sequence(Pattern ":" Type, ",") ")"
@@ -1003,7 +1003,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
   ImplItemMethod ::=
     FnPrefix "fn" Identifier Generics?
     ImplMethodArgs ("->" Type)?
-    WhereClauses? Block
+    WhereClause? Block
 
   ImplMethodArgs ::=
       "(" sequence(Pattern ":" Type, ",") ")"
@@ -1067,7 +1067,7 @@ Rustの構文では、コンマ区切りの列が様々な場所で出てきま�
 
   TyParam ::= ...
 
-  WhereClauses ::= ...
+  WhereClause ::= ...
 
   TyParamBounds ::= ...
 \end{lstlisting}
